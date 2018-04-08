@@ -1,0 +1,77 @@
+---
+title: "Cervezas artesanales"
+output: html_notebook
+---
+
+# Paquetes necesarios
+
+```{r}
+library(dplyr)
+```
+
+
+# Obtener los datos
+
+El sitio [Brewer's friends](https://www.brewersfriend.com/) mantiene una lista de recetas de unas 73,000 cervezas. Parte de estos datos están disponibles en Kaggle (https://www.kaggle.com/jtrofe/beer-recipes) en dos archivos, el que necesitamos para este trabajo es recipeData.csv. Los datos son abiertos, pero para descargarlos Kaggle pide registrarse en el sitio o ingresar con una cuenta de Google o Facebook. 
+
+Una vez que tenemos el archivo disponible en algún directorio local, lo cargamos en un dataframe de R. En este caso en particular,el archivo está en un subdirectorio llamado *beer_recipes* (prestar atención al tipo de barras que separan subidirectorios):
+
+
+```{r echo=TRUE,cache=TRUE}
+cerv <- read.csv("../beer_recipes/recipeData.csv", header = T, stringsAsFactors = F, na.strings = "N/A")
+```
+
+Antes de analizar el resultado de este paso veamos algunos de los argumentos que le pasamos a la función *read.csv()*. Con "header = T" estamos indicando que la primera línea del archivo contiene los nombres de las variables, "stringsAsFactors = F" indica que los datos que no sean númericos o lógicos deben leerse como texto, y no como factores que es el comportamiento por default de la función. Finalmente, el argumento na.strings sirve para indicar cómo se codifican los datos faltantes. En general, si los datos faltantes están representados por espacios en blanco o la cadena "NA", no hace falta indicar nada, pero en este caso están codificados como "N/A".  
+
+Si no hubo errores en la lectura el primer paso siempre es revisar que el dataframe tiene los datos que esperamos.
+
+Revisamos el tamaño, el tipo y nombre de variables y algunos registros:
+
+```{r}
+dim(cerv)
+```
+
+```{r}
+head(cerv)
+```
+
+```{r}
+str(cerv)
+```
+
+En total tenemos 22 variables. Es importante mirar el tipo de las variables y revisar las que presenten alguna anomalía. Por ejemplo,  *PrimingAmount* es de tipo caracter pero debería ser numérica. Si prestamos atención a los valores de ejemplo vemos que el primero es "4.5 oz". El problema posiblemente es que se indicó la cantidad y la unidad de masa: 
+
+```{r}
+head(cerv$PrimingAmount, 15)
+```
+
+En efecto, vemos que en algunos casos se indican onzas, en otros gramos, en otros rangos. A no ser que esta variable sea crítica para el análisis es mejor dejarla de lado, porque convertirla a valores útiles va a costar mucho trabajo. Además, tienenun gran cantidad de datos faltantes:
+
+```{r}
+table(is.na(cerv$PrimingAmount))
+```
+
+
+# Preparación de los datos
+
+El dataframe tiene una variable "BeerID" y otra llamada "Name". Estas variables son, respectivamente, un identificador numérico único y el nombre de cada cerveza. Lo mismo sucede para los estilos de las cervezas que se indican con un identificador numérico ("StyleID") o con su nombr ("Style"). La variable URL contiene una cadena de caracteres que junto con el URL base del sitio Brewer's Friend permite consturir el URL de cada cerveza dentro del sitio.
+
+La variable *Size.L.* indica el volumen en litros del lote a preparar, es específico de la receta y no es una característica de la cerveza. Lo mismo sucede con *BoilSize* y *BoilGravity*. La variable *BrewMethod* también es específica de la receta, pero nos podría interesar saber qué efecto tiene dentro de un estilo.
+
+Al final de la sección anterior vimos que una de las variables, *PrimingAmount*, tiene una gran cantidad de datos faltantes. Cuando la proporción de datos faltantes es baja, se puede mantener esa variable en el análisis, o se pueden "imputar" los datos, que es reemplazar los datos faltantes por valores esperados. Veamos cuántas otras variables tienen datos faltantes, y con una función determinemos el recuento de datos faltantes:
+
+```{r}
+cerv %>% select(OG:PrimingMethod) %>% summarise_all(anyNA)
+cuenta_na <- function(x) return(as.numeric(table(is.na(x))[2]))
+cerv %>% select(OG:PrimingMethod) %>% summarise_all(cuenta_na)
+```
+
+Si lo que nos interesa es analizar los estilos de las cervezas  conocer la relación de malta/agua (*MashThickness*) al inicio de la preparación del mosto podría ser de ayuda, pero no es fundamental. Por este motivo, no es grave si descartamos esa variable. Las otras dos variables con gran cantidad de datos faltantes *PitchRate* y *PrimaryTemp* son de interés, pero la proporción de datos faltantes es alta como para poder imputarlas con confianza. *PrimingMethod* es una variable relacionada con *PrimingAmount* que analizamos antes, no hay problema en descartarla (tratandose de cervezas artesanales, casi todas reciben algún "priming" en la botella o carbonatación en otros contenedores.
+
+De esta manera las variables de interés son *BeerID* (o *Name*), *StyleID* (o *Style*), *OG*, *FG*, *ABV*, *IBU*, *Color*, *BoilTime*, *Efficiency*, *SugarScale*, *BrewMethod*.
+
+```{r}
+cerv_2 <- cerv %>% select(Name, Style, OG, FG, ABV, IBU, Color, BoilTime, Efficiency, SugarScale, BrewMethod)
+
+```
+
