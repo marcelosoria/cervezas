@@ -1,11 +1,11 @@
 ---
-title: "Cervezas artesanales"
+title: "Análisis de cervezas artesanales"
 output: html_notebook
 ---
 
 # Paquetes necesarios
 
-```{r}
+```{r results='hide'}
 library(dplyr)
 ```
 
@@ -14,7 +14,9 @@ library(dplyr)
 
 El sitio [Brewer's friends](https://www.brewersfriend.com/) mantiene una lista de recetas de unas 73,000 cervezas. Parte de estos datos están disponibles en Kaggle (https://www.kaggle.com/jtrofe/beer-recipes) en dos archivos, el que necesitamos para este trabajo es recipeData.csv. Los datos son abiertos, pero para descargarlos Kaggle pide registrarse en el sitio o ingresar con una cuenta de Google o Facebook. 
 
-Una vez que tenemos el archivo disponible en algún directorio local, lo cargamos en un dataframe de R. En este caso en particular,el archivo está en un subdirectorio llamado *beer_recipes* (prestar atención al tipo de barras que separan subidirectorios):
+El objetivo de nuestro trabajo será entender que caracteracterísticas definen diferentes estilos de cerveza.
+
+Una vez que tenemos el archivo disponible en algún directorio local, lo cargamos en un *dataframe* de R. En este caso en particular,el archivo está en un subdirectorio llamado *beer_recipes* (prestar atención al tipo de barras que separan subidirectorios):
 
 
 ```{r echo=TRUE,cache=TRUE}
@@ -23,9 +25,7 @@ cerv <- read.csv("../beer_recipes/recipeData.csv", header = T, stringsAsFactors 
 
 Antes de analizar el resultado de este paso veamos algunos de los argumentos que le pasamos a la función *read.csv()*. Con "header = T" estamos indicando que la primera línea del archivo contiene los nombres de las variables, "stringsAsFactors = F" indica que los datos que no sean númericos o lógicos deben leerse como texto, y no como factores que es el comportamiento por default de la función. Finalmente, el argumento na.strings sirve para indicar cómo se codifican los datos faltantes. En general, si los datos faltantes están representados por espacios en blanco o la cadena "NA", no hace falta indicar nada, pero en este caso están codificados como "N/A".  
 
-Si no hubo errores en la lectura el primer paso siempre es revisar que el dataframe tiene los datos que esperamos.
-
-Revisamos el tamaño, el tipo y nombre de variables y algunos registros:
+Si no hubo errores en la lectura, el primer paso siempre es revisar que el *dataframe* tenga los datos que esperamos. Revisamos el tamaño, el tipo y nombre de variables y algunos registros:
 
 ```{r}
 dim(cerv)
@@ -45,7 +45,7 @@ En total tenemos 22 variables. Es importante mirar el tipo de las variables y re
 head(cerv$PrimingAmount, 15)
 ```
 
-En efecto, vemos que en algunos casos se indican onzas, en otros gramos, en otros rangos. A no ser que esta variable sea crítica para el análisis es mejor dejarla de lado, porque convertirla a valores útiles va a costar mucho trabajo. Además, tienenun gran cantidad de datos faltantes:
+En efecto, vemos que en algunos casos se indican onzas, en otros gramos, y en otros rangos. Esta variable no es crítica para el análisis y es mejor dejarla de lado, porque convertirla a valores útiles va a costar mucho trabajo. Además, tiene una gran cantidad de datos faltantes:
 
 ```{r}
 table(is.na(cerv$PrimingAmount))
@@ -54,15 +54,24 @@ table(is.na(cerv$PrimingAmount))
 
 # Preparación de los datos
 
-El dataframe tiene una variable "BeerID" y otra llamada "Name". Estas variables son, respectivamente, un identificador numérico único y el nombre de cada cerveza. Lo mismo sucede para los estilos de las cervezas que se indican con un identificador numérico ("StyleID") o con su nombr ("Style"). La variable URL contiene una cadena de caracteres que junto con el URL base del sitio Brewer's Friend permite consturir el URL de cada cerveza dentro del sitio.
+El *dataframe* tiene una variable "BeerID" y otra llamada "Name". Estas variables son, respectivamente, un identificador numérico único y el nombre de cada cerveza. Lo mismo sucede para los estilos de las cervezas que se indican con un identificador numérico ("StyleID") o con su nombr ("Style"). La variable URL contiene una cadena de caracteres que junto con el URL base del sitio Brewer's Friend permite consturir el URL de cada cerveza dentro del sitio.
 
 La variable *Size.L.* indica el volumen en litros del lote a preparar, es específico de la receta y no es una característica de la cerveza. Lo mismo sucede con *BoilSize* y *BoilGravity*. La variable *BrewMethod* también es específica de la receta, pero nos podría interesar saber qué efecto tiene dentro de un estilo.
 
-Al final de la sección anterior vimos que una de las variables, *PrimingAmount*, tiene una gran cantidad de datos faltantes. Cuando la proporción de datos faltantes es baja, se puede mantener esa variable en el análisis, o se pueden "imputar" los datos, que es reemplazar los datos faltantes por valores esperados. Veamos cuántas otras variables tienen datos faltantes, y con una función determinemos el recuento de datos faltantes:
+Al final de la sección anterior vimos que una de las variables, *PrimingAmount*, tiene una gran cantidad de datos faltantes. Cuando la proporción de datos faltantes es baja, se puede mantener esa variable en el análisis, o se pueden "imputar" los datos, que es reemplazar los datos faltantes por valores esperados. Veamos cuántas otras variables tienen datos faltantes usandodos funciones del paquete *dplyr* y el operador "pipe", que introdujo el paquete *magrittR* y que permite escribir código más claro.
 
 ```{r}
-cerv %>% select(OG:PrimingMethod) %>% summarise_all(anyNA)
-cuenta_na <- function(x) return(as.numeric(table(is.na(x))[2]))
+cerv %>% select(OG:PrimingMethod) %>% summarize_all(anyNA)
+```
+
+Vemos que la mayoría de los variables tienen datos completos, pero hay varias con datos faltantes. Es importante ver cuántos son los datos faltantes, porque esto nos permitirá decidir qué hacer con ellos. Para esto vamos a crear una función sencilla que calcula el número de datos faltantes y lo devuelve como un escalar. La funcon *table()* genera un objeto de tipo tabla que en este caso es de dimensión 2, algo que no puede *summarize_all* no puede utilizar.
+
+
+```{r}
+cuenta_na <- function(x) {
+  tab_na <- table(is.na(x))
+  return(as.numeric(tab_na[2]))
+}
 cerv %>% select(OG:PrimingMethod) %>% summarise_all(cuenta_na)
 ```
 
@@ -72,6 +81,59 @@ De esta manera las variables de interés son *BeerID* (o *Name*), *StyleID* (o *
 
 ```{r}
 cerv_2 <- cerv %>% select(Name, Style, OG, FG, ABV, IBU, Color, BoilTime, Efficiency, SugarScale, BrewMethod)
+
+```
+
+La variable *SugarScale* indica las unidades en que están registrados los datos de gravedad inicial y final (OG y FG, respectivamente): grados Plato o gravedad específica (gramos/litro). Para el análisis es necesario tener todas las mediciones en la misma unidad, en nuestro caso, gravedad específica.
+
+La conversión de grados Plato a g/l se realiza con esta fórmula:
+
+ $1 + \frac{plato}{258.6-227.1 \frac{plato}{258.2}}$
+
+La función en R es: 
+
+```{r}
+plato_a_ge <- function(plato){
+  ge <- 1 + (plato / (258.6 - ((plato/258.2) * 227.1)))
+  return(ge)
+}
+```
+
+Con esta función calculamos la conversión de unidades para OG, y lo asignamos a un nuevo *dataframe*. Luego revisamos unos ejemplos para verificar la conversión.
+
+```{r}
+cerv_3 <- cerv_2 %>% mutate(OG_n = ifelse(SugarScale == "Specific Gravity", OG, plato_a_ge(OG)))
+
+cerv_3 <- cerv_3 %>% mutate(FG_n = ifelse(SugarScale == "Specific Gravity", FG, plato_a_ge(FG)))
+
+cerv_3 %>% select(SugarScale, OG, FG, OG_n, FG_n) %>% filter(SugarScale != "Specific Gravity") %>% head
+```
+
+Ahora ya podemos eliminar las variables *OG*, *FG* y *SugarScale*, y renombrar *OG_n* y *FG_n*:
+
+```{r}
+cerv_3$OG <- NULL
+cerv_3$FG <- NULL
+cerv_3$SugarScale <- NULL
+names(cerv_3)[9:10]
+names(cerv_3)[9:10] <- c("OG", "FG")
+```
+
+Y le damos un nombre más descriptivo a *cerv_3* y eliminamos los *dataframes* intermedios:
+
+```{r}
+cervs <- cerv_3
+rm(cerv_2, cerv_3)
+```
+
+# Análisis exploratorio
+
+¿Cuántos estilos de cerveza hay? ¿Cuántas recetas hay para cada estilo?
+
+```{r}
+stl <- cervs %>% group_by(Style) %>% select(Style) %>% 
+  summarize(recuento = n()) %>%
+  arrange(desc(recuento))
 
 ```
 
